@@ -123,8 +123,3 @@ Future<void> gerarVideo(String userId, String categoria) async {
   await Future.delayed(Duration(seconds: 2));
   await sendMessage(userId, "✅ Vídeo pronto! (simulação)");
 }
-
-# --- Main ---
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-      
