@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-final botToken = 'SEU_BOT_TOKEN_AQUI';
-final donoId = 'SEU_CHAT_ID_AQUI';
+final botToken = 'SEU_BOT_TOKEN_AQUI'; // coloque seu token aqui
+final donoId = 'SEU_CHAT_ID_AQUI'; // coloque seu id de usuário aqui
 final usuariosFile = File('usuarios.json');
 
 Future<Set<String>> lerUsuariosLiberados() async {
@@ -24,6 +24,15 @@ Future<void> main() async {
   print('Webhook rodando na porta 8080...');
 
   await for (HttpRequest request in server) {
+    // 🔹 Health check do Render
+    if (request.method == 'GET') {
+      request.response.statusCode = 200;
+      request.response.write('Bot rodando OK ✅');
+      await request.response.close();
+      continue;
+    }
+
+    // 🔹 Tratamento do webhook do Telegram
     if (request.method == 'POST') {
       final content = await utf8.decoder.bind(request).join();
       final data = jsonDecode(content);
@@ -53,18 +62,26 @@ Future<void> main() async {
 
         if (text == '/start') {
           await sendStartMessage(userId, usuariosLiberados.contains(userId));
-        } else if (['paisagem','relax','nostalgia','musica'].contains(text)) {
+        } else if (['paisagem', 'relax', 'nostalgia', 'musica'].contains(text)) {
           if (!usuariosLiberados.contains(userId)) {
             await sendMessage(userId,
                 '❌ Você não tem permissão para gerar vídeos. Contate o dono para liberação.');
             return;
           }
           String categoria = '';
-          switch(text){
-            case 'paisagem': categoria = 'Paisagem'; break;
-            case 'relax': categoria = 'Relaxamento'; break;
-            case 'nostalgia': categoria = 'Nostalgia'; break;
-            case 'musica': categoria = 'Música instrumental'; break;
+          switch (text) {
+            case 'paisagem':
+              categoria = 'Paisagem';
+              break;
+            case 'relax':
+              categoria = 'Relaxamento';
+              break;
+            case 'nostalgia':
+              categoria = 'Nostalgia';
+              break;
+            case 'musica':
+              categoria = 'Música instrumental';
+              break;
           }
           await gerarVideo(userId, categoria);
         } else if (text == 'liberar_usuario' && userId == donoId) {
@@ -93,18 +110,17 @@ Future<void> main() async {
   }
 }
 
-// Envia /start com botões inline
+// 📌 Mensagem de boas-vindas com botões
 Future<void> sendStartMessage(String chatId, bool isLiberado) async {
   final msg = """
-🎬 Olá! Eu sou o VideoMakerBot Ultimate.
+🎬 Olá! Eu sou o VideoMakerBot.
 
-💡 Funções disponíveis:
-Clique em uma categoria para iniciar:
+💡 O que eu faço:
+- Gero vídeos automáticos com imagens e músicas livres de direitos autorais.
+- Adiciono legendas e formato pronto para redes sociais.
+- Qualquer um pode explorar o menu, mas só usuários liberados geram vídeos completos.
 
-⚠️ Observações:
-- Qualquer usuário pode explorar o menu e ver exemplos.
-- Geração completa de vídeos é só para usuários liberados.
-- Conteúdo é CC0 (livre de direitos autorais).
+⚠️ Se você não estiver liberado, peça acesso ao dono do bot.
 """;
 
   final keyboard = [
@@ -132,7 +148,7 @@ Clique em uma categoria para iniciar:
   await http.get(Uri.parse(url));
 }
 
-// Função para responder callbacks (remove "loading" no Telegram)
+// 📌 Responde callback (remove "loading" nos botões)
 Future<void> answerCallback(String callbackId) async {
   if (callbackId.isEmpty) return;
   final url =
@@ -140,12 +156,12 @@ Future<void> answerCallback(String callbackId) async {
   await http.get(Uri.parse(url));
 }
 
-// Função placeholder para gerar vídeo
+// 📌 Placeholder de geração de vídeo
 Future<void> gerarVideo(String userId, String categoria) async {
-  await sendMessage(userId, '🚧 Função gerar vídeo para "$categoria" ainda não implementada.');
+  await sendMessage(userId, '🚧 Gerando vídeo de "$categoria"... (função em desenvolvimento)');
 }
 
-// Função para enviar mensagens
+// 📌 Enviar mensagem simples
 Future<void> sendMessage(String chatId, String text) async {
   final url =
       'https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatId&text=${Uri.encodeComponent(text)}';
