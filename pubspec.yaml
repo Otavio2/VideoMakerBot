@@ -1,9 +1,9 @@
-name: video_maker_bot
-description: Bot Telegram que gera vídeos CC0 com música e legendas automáticas.
+name: videomakerbot
+description: Bot de geração de vídeos automáticos para Telegram
 version: 1.0.0
 
 environment:
-  sdk: ">=2.18.0 <3.0.0"
+  sdk: ">=2.17.0 <4.0.0"
 
 dependencies:
-  http: ^1.1.0
+  http: ^0.13.6
