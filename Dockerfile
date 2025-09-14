@@ -1,17 +1,16 @@
 # Imagem oficial do Dart
 FROM dart:stable
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Copia todos os arquivos do projeto
+# Copia todos os arquivos
 COPY . .
 
-# Resolve dependências do Dart
+# Resolve dependências
 RUN dart pub get
 
-# Exponha a porta que o bot usará
+# Porta do Render (usada pela env PORT)
 EXPOSE 8080
 
-# Comando para iniciar o bot
+# Comando para iniciar
 CMD ["dart", "run", "main.dart"]
