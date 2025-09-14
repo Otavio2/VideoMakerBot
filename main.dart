@@ -10,6 +10,7 @@ final Set<String> usuariosLiberados = {};
 final Set<String> usuariosBloqueados = {};
 
 Future<void> main() async {
+  // Porta dinâmica fornecida pelo Render
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
   print('Webhook rodando na porta $port...');
