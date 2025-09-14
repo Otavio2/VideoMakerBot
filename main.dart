@@ -1,106 +1,84 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:http/http.dart' as http;
 
-final botToken = 'SEU_BOT_TOKEN_AQUI'; // coloque seu token aqui
-final donoId = 'SEU_CHAT_ID_AQUI'; // coloque seu id de usuário aqui
-final usuariosFile = File('usuarios.json');
+// 🔑 coloque aqui seu TOKEN do bot
+const String botToken = String.fromEnvironment('BOT_TOKEN', defaultValue: 'COLOQUE_SEU_TOKEN_AQUI');
+// 🔑 coloque aqui o ID do dono (ou deixe vazio e você adiciona depois pelo botão)
+const String donoId = String.fromEnvironment('OWNER_ID', defaultValue: '');
 
-Future<Set<String>> lerUsuariosLiberados() async {
-  if (!await usuariosFile.exists()) {
-    await usuariosFile.writeAsString(jsonEncode({'liberados': []}));
-  }
-  final data = jsonDecode(await usuariosFile.readAsString());
-  return Set<String>.from(data['liberados']);
-}
-
-Future<void> salvarUsuariosLiberados(Set<String> ids) async {
-  final data = {'liberados': ids.toList()};
-  await usuariosFile.writeAsString(jsonEncode(data));
-}
+final Set<String> usuariosLiberados = {};
+final Set<String> usuariosBloqueados = {};
 
 Future<void> main() async {
-  final server = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
-  print('Webhook rodando na porta 8080...');
+  final port = int.parse(Platform.environment['PORT'] ?? '8080');
+  final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+  print('Webhook rodando na porta $port...');
 
   await for (HttpRequest request in server) {
-    // 🔹 Health check do Render
     if (request.method == 'GET') {
+      // healthcheck do Render
       request.response.statusCode = 200;
       request.response.write('Bot rodando OK ✅');
       await request.response.close();
       continue;
     }
 
-    // 🔹 Tratamento do webhook do Telegram
     if (request.method == 'POST') {
       final content = await utf8.decoder.bind(request).join();
       final data = jsonDecode(content);
 
-      if (data['message'] != null || data['callback_query'] != null) {
-        String userId = '';
-        String text = '';
-        String? callbackId;
-
-        // Mensagem normal
-        if (data['message'] != null) {
-          final message = data['message'];
-          text = message['text'] ?? '';
-          userId = message['from']['id'].toString();
-        }
-
-        // Clique em botão inline
-        if (data['callback_query'] != null) {
-          final query = data['callback_query'];
-          text = query['data'] ?? '';
-          userId = query['from']['id'].toString();
-          callbackId = query['id'];
-          if (callbackId != null) await answerCallback(callbackId);
-        }
-
-        final usuariosLiberados = await lerUsuariosLiberados();
+      if (data.containsKey('message')) {
+        final msg = data['message'];
+        final userId = msg['from']['id'].toString();
+        final text = msg['text'] ?? '';
 
         if (text == '/start') {
-          await sendStartMessage(userId, usuariosLiberados.contains(userId));
-        } else if (['paisagem', 'relax', 'nostalgia', 'musica'].contains(text)) {
-          if (!usuariosLiberados.contains(userId)) {
-            await sendMessage(userId,
-                '❌ Você não tem permissão para gerar vídeos. Contate o dono para liberação.');
-            return;
+          await sendMessage(userId, '''
+🤖 *Bem-vindo ao VideoMaker Bot!*
+
+Este bot pode:
+- Criar vídeos automáticos com imagens, músicas e legendas CC0 🎬
+- Enviar conteúdos prontos para redes sociais 📲
+- Mostrar exemplos antes de liberar a geração 🔒
+
+⚙️ O dono pode liberar ou remover usuários da geração de vídeos.
+          ''',
+              replyMarkup: {
+                "inline_keyboard": [
+                  [
+                    {"text": "🎥 Gerar Vídeo", "callback_data": "gerar_video"},
+                  ],
+                  [
+                    {"text": "✅ Liberar Usuário", "callback_data": "liberar"},
+                    {"text": "❌ Remover Usuário", "callback_data": "remover"},
+                  ]
+                ]
+              });
+        }
+      }
+
+      if (data.containsKey('callback_query')) {
+        final callback = data['callback_query'];
+        final callbackId = callback['id'];
+        final userId = callback['from']['id'].toString();
+        final dataCb = callback['data'];
+
+        await answerCallback(callbackId);
+
+        if (dataCb == 'gerar_video') {
+          if (userId == donoId || usuariosLiberados.contains(userId)) {
+            await gerarVideo(userId, "paisagem");
+          } else {
+            await sendMessage(userId, '🚫 Você não tem permissão para gerar vídeos. Peça ao dono do bot.');
           }
-          String categoria = '';
-          switch (text) {
-            case 'paisagem':
-              categoria = 'Paisagem';
-              break;
-            case 'relax':
-              categoria = 'Relaxamento';
-              break;
-            case 'nostalgia':
-              categoria = 'Nostalgia';
-              break;
-            case 'musica':
-              categoria = 'Música instrumental';
-              break;
-          }
-          await gerarVideo(userId, categoria);
-        } else if (text == 'liberar_usuario' && userId == donoId) {
-          await sendMessage(userId, 'Envie o ID ou @username do usuário que deseja liberar:');
-        } else if (text == 'remover_usuario' && userId == donoId) {
-          await sendMessage(userId, 'Envie o ID ou @username do usuário que deseja remover:');
-        } else if (text.startsWith('@') || RegExp(r'^\d+$').hasMatch(text)) {
-          if (userId == donoId) {
-            String id = text.replaceAll('@', '');
-            if (usuariosLiberados.contains(id)) {
-              usuariosLiberados.remove(id);
-              await salvarUsuariosLiberados(usuariosLiberados);
-              await sendMessage(userId, '❌ Usuário $id removido da geração de vídeos.');
-            } else {
-              usuariosLiberados.add(id);
-              await salvarUsuariosLiberados(usuariosLiberados);
-              await sendMessage(userId, '✅ Usuário $id liberado para gerar vídeos!');
-            }
-          }
+        }
+
+        if (dataCb == 'liberar' && userId == donoId) {
+          await sendMessage(userId, 'Envie o ID do usuário que deseja liberar:');
+        }
+
+        if (dataCb == 'remover' && userId == donoId) {
+          await sendMessage(userId, 'Envie o ID do usuário que deseja remover:');
         }
       }
 
@@ -110,60 +88,39 @@ Future<void> main() async {
   }
 }
 
-// 📌 Mensagem de boas-vindas com botões
-Future<void> sendStartMessage(String chatId, bool isLiberado) async {
-  final msg = """
-🎬 Olá! Eu sou o VideoMakerBot.
-
-💡 O que eu faço:
-- Gero vídeos automáticos com imagens e músicas livres de direitos autorais.
-- Adiciono legendas e formato pronto para redes sociais.
-- Qualquer um pode explorar o menu, mas só usuários liberados geram vídeos completos.
-
-⚠️ Se você não estiver liberado, peça acesso ao dono do bot.
-""";
-
-  final keyboard = [
-    [
-      {'text': '🌄 Paisagem', 'callback_data': 'paisagem'},
-      {'text': '🧘 Relax', 'callback_data': 'relax'}
-    ],
-    [
-      {'text': '🕰 Nostalgia', 'callback_data': 'nostalgia'},
-      {'text': '🎵 Música', 'callback_data': 'musica'}
-    ]
-  ];
-
-  if (chatId == donoId) {
-    keyboard.add([
-      {'text': '🔑 Liberar Usuário', 'callback_data': 'liberar_usuario'},
-      {'text': '❌ Remover Usuário', 'callback_data': 'remover_usuario'}
-    ]);
+// Função de enviar mensagem
+Future<void> sendMessage(String chatId, String text, {Map<String, dynamic>? replyMarkup}) async {
+  final uri = Uri.parse("https://api.telegram.org/bot$botToken/sendMessage");
+  final body = {
+    "chat_id": chatId,
+    "text": text,
+    "parse_mode": "Markdown",
+  };
+  if (replyMarkup != null) {
+    body["reply_markup"] = jsonEncode(replyMarkup);
   }
-
-  final replyMarkup = jsonEncode({'inline_keyboard': keyboard});
-
-  final url =
-      'https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatId&text=${Uri.encodeComponent(msg)}&reply_markup=${Uri.encodeComponent(replyMarkup)}';
-  await http.get(Uri.parse(url));
+  await HttpClient().postUrl(uri).then((req) {
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode(body));
+    return req.close();
+  });
 }
 
-// 📌 Responde callback (remove "loading" nos botões)
+// Responder cliques de botão
 Future<void> answerCallback(String callbackId) async {
-  if (callbackId.isEmpty) return;
-  final url =
-      'https://api.telegram.org/bot$botToken/answerCallbackQuery?callback_query_id=$callbackId';
-  await http.get(Uri.parse(url));
+  final uri = Uri.parse("https://api.telegram.org/bot$botToken/answerCallbackQuery");
+  final body = {"callback_query_id": callbackId};
+  await HttpClient().postUrl(uri).then((req) {
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode(body));
+    return req.close();
+  });
 }
 
-// 📌 Placeholder de geração de vídeo
+// Função simulada de gerar vídeo
 Future<void> gerarVideo(String userId, String categoria) async {
-  await sendMessage(userId, '🚧 Gerando vídeo de "$categoria"... (função em desenvolvimento)');
-}
-
-// 📌 Enviar mensagem simples
-Future<void> sendMessage(String chatId, String text) async {
-  final url =
-      'https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatId&text=${Uri.encodeComponent(text)}';
-  await http.get(Uri.parse(url));
+  // ⚠️ Aqui depois podemos integrar imagens CC0 + música + legendas
+  await sendMessage(userId, "🎬 Gerando vídeo automático na categoria: $categoria ...");
+  await Future.delayed(Duration(seconds: 2));
+  await sendMessage(userId, "✅ Vídeo pronto! (simulação)");
 }
