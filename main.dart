@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-const String botToken = String.fromEnvironment('BOT_TOKEN', defaultValue: 'COLOQUE_SEU_TOKEN_AQUI');
-const String donoId = String.fromEnvironment('OWNER_ID', defaultValue: 'COLOQUE_SEU_ID_AQUI');
+const String botToken =
+    String.fromEnvironment('BOT_TOKEN', defaultValue: 'COLOQUE_SEU_TOKEN_AQUI');
+const String donoId =
+    String.fromEnvironment('OWNER_ID', defaultValue: 'COLOQUE_SEU_ID_AQUI');
 
 final Set<String> usuariosLiberados = {};
 final Set<String> usuariosBloqueados = {};
@@ -24,13 +26,18 @@ Future<void> main() async {
 
       if (request.method == 'POST') {
         final content = await utf8.decoder.bind(request).join();
+        print('[DEBUG] Conteúdo do POST: $content');
+
         final data = jsonDecode(content);
         print('[LOG] Recebido webhook: $data');
 
+        // Mensagens de texto
         if (data.containsKey('message')) {
           final msg = data['message'];
           final userId = msg['from']['id'].toString();
           final text = msg['text'] ?? '';
+
+          print('[DEBUG] Mensagem de $userId: $text');
 
           if (text == '/start') {
             await sendMessage(userId, '''
@@ -55,6 +62,7 @@ Future<void> main() async {
           }
         }
 
+        // Callback de botões
         if (data.containsKey('callback_query')) {
           final callback = data['callback_query'];
           final callbackId = callback['id'];
@@ -67,7 +75,8 @@ Future<void> main() async {
             if (userId == donoId || usuariosLiberados.contains(userId)) {
               await gerarVideo(userId, "paisagem");
             } else {
-              await sendMessage(userId, '🚫 Você não tem permissão para gerar vídeos. Peça ao dono do bot.');
+              await sendMessage(
+                  userId, '🚫 Você não tem permissão para gerar vídeos.');
             }
           }
 
@@ -85,13 +94,17 @@ Future<void> main() async {
       }
     } catch (e, s) {
       print('[ERRO] $e\n$s');
-      request.response.statusCode = 500;
-      await request.response.close();
+      try {
+        request.response.statusCode = 500;
+        await request.response.close();
+      } catch (_) {}
     }
   }
 }
 
-Future<void> sendMessage(String chatId, String text, {Map<String, dynamic>? replyMarkup}) async {
+// Envia mensagens para Telegram
+Future<void> sendMessage(String chatId, String text,
+    {Map<String, dynamic>? replyMarkup}) async {
   final uri = Uri.parse("https://api.telegram.org/bot$botToken/sendMessage");
   final body = {
     "chat_id": chatId,
@@ -101,23 +114,35 @@ Future<void> sendMessage(String chatId, String text, {Map<String, dynamic>? repl
   if (replyMarkup != null) {
     body["reply_markup"] = jsonEncode(replyMarkup);
   }
-  await HttpClient().postUrl(uri).then((req) {
-    req.headers.contentType = ContentType.json;
-    req.write(jsonEncode(body));
-    return req.close();
-  });
+
+  try {
+    await HttpClient().postUrl(uri).then((req) {
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(body));
+      return req.close();
+    });
+  } catch (e) {
+    print('[ERRO] Falha ao enviar mensagem: $e');
+  }
 }
 
+// Responde callbacks de botões
 Future<void> answerCallback(String callbackId) async {
-  final uri = Uri.parse("https://api.telegram.org/bot$botToken/answerCallbackQuery");
+  final uri =
+      Uri.parse("https://api.telegram.org/bot$botToken/answerCallbackQuery");
   final body = {"callback_query_id": callbackId};
-  await HttpClient().postUrl(uri).then((req) {
-    req.headers.contentType = ContentType.json;
-    req.write(jsonEncode(body));
-    return req.close();
-  });
+  try {
+    await HttpClient().postUrl(uri).then((req) {
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(body));
+      return req.close();
+    });
+  } catch (e) {
+    print('[ERRO] Falha ao responder callback: $e');
+  }
 }
 
+// Simula geração de vídeo
 Future<void> gerarVideo(String userId, String categoria) async {
   await sendMessage(userId, "🎬 Gerando vídeo automático na categoria: $categoria ...");
   await Future.delayed(Duration(seconds: 2));
