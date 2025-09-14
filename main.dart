@@ -33,18 +33,20 @@ Future<void> main() async {
         String text = '';
         String? callbackId;
 
+        // Mensagem normal
         if (data['message'] != null) {
           final message = data['message'];
           text = message['text'] ?? '';
           userId = message['from']['id'].toString();
         }
 
+        // Clique em botão inline
         if (data['callback_query'] != null) {
           final query = data['callback_query'];
           text = query['data'] ?? '';
           userId = query['from']['id'].toString();
           callbackId = query['id'];
-          await answerCallback(callbackId);
+          if (callbackId != null) await answerCallback(callbackId);
         }
 
         final usuariosLiberados = await lerUsuariosLiberados();
@@ -130,11 +132,22 @@ Clique em uma categoria para iniciar:
   await http.get(Uri.parse(url));
 }
 
+// Função para responder callbacks (remove "loading" no Telegram)
 Future<void> answerCallback(String callbackId) async {
+  if (callbackId.isEmpty) return;
   final url =
       'https://api.telegram.org/bot$botToken/answerCallbackQuery?callback_query_id=$callbackId';
   await http.get(Uri.parse(url));
 }
 
-// Funções de gerar vídeo com slideshow, música CC0 e legendas (Whisper + LibreTranslate) 
-// e envio via Telegram seguem a mesma lógica do código anterior (gerarVideo, downloadFile, sendMessage, sendVideo)
+// Função placeholder para gerar vídeo
+Future<void> gerarVideo(String userId, String categoria) async {
+  await sendMessage(userId, '🚧 Função gerar vídeo para "$categoria" ainda não implementada.');
+}
+
+// Função para enviar mensagens
+Future<void> sendMessage(String chatId, String text) async {
+  final url =
+      'https://api.telegram.org/bot$botToken/sendMessage?chat_id=$chatId&text=${Uri.encodeComponent(text)}';
+  await http.get(Uri.parse(url));
+}
